@@ -1,9 +1,10 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 
-export default function SuccessPage() {
+// 1. We move the logic into a sub-component
+function SuccessPageContent() {
   const params = useSearchParams();
   const router = useRouter();
   const booking_id = params.get("booking_id");
@@ -22,7 +23,11 @@ export default function SuccessPage() {
       return;
     }
 
-    fetch("http://localhost:5000/api/payments/confirm", {
+    // --- CRITICAL FIX: Replace localhost with Environment Variable ---
+    // This uses the URL you set in the Vercel Dashboard
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+    fetch(`${API_URL}/api/payments/confirm`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -54,5 +59,14 @@ export default function SuccessPage() {
         Go to My Bookings
       </button>
     </div>
+  );
+}
+
+// 2. The main exported page wraps the content in Suspense
+export default function SuccessPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <SuccessPageContent />
+    </Suspense>
   );
 }
