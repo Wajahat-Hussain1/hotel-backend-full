@@ -10,7 +10,7 @@ const app = express();
 
 const allowedOrigins = [
   'http://localhost:3000', // my local frontend during development
-  'https://your-frontend-link.vercel.app' // i will replace this later with my actual Vercel URL
+  'https://hotel-backend-full-7ggu7vhxw-wajahat-hussains-projects-629447fe.vercel.app/' // i will replace this later with my actual Vercel URL
 ];
 
 app.use(cors({
