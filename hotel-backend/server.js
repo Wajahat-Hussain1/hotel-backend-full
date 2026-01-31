@@ -7,29 +7,40 @@ const errorMiddleware = require('./src/middlewares/errorMiddleware');
 
 const app = express();
 
-
+// --- CORS CONFIGURATION ---
 const allowedOrigins = [
-  'http://localhost:3000', // my local frontend during development
-  'https://hotel-backend-full-7ggu7vhxw-wajahat-hussains-projects-629447fe.vercel.app' // i will replace this later with my actual Vercel URL
+  'http://localhost:3000', 
+  'https://hotel-backend-full-7ggu7vhxw-wajahat-hussains-projects-629447fe.vercel.app',
+  'https://hotel-backend-full-60xy7hi77-wajahat-hussains-projects-629447fe.vercel.app'
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
+
+    // Check if origin is in our list OR is a Vercel preview URL from your project
+    const isAllowed = allowedOrigins.indexOf(origin) !== -1;
+    const isVercelPreview = origin.endsWith(".vercel.app") && origin.includes("wajahat-hussains-projects");
+
+    if (isAllowed || isVercelPreview) {
+      return callback(null, true);
+    } else {
+      // This log will appear in Render so you can see exactly what URL to add next time
+      console.log("CORS blocked origin:", origin);
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
       return callback(new Error(msg), false);
     }
-    return callback(null, true);
   },
   credentials: true
 }));
 
 app.use(bodyParser.json());
 
-// initialize DB pool
+// Initialize DB pool
 initDB();
+
+// --- ROUTES ---
 
 // PDF + email routes
 const auth = require("./src/middlewares/authMiddleware");
@@ -54,10 +65,10 @@ app.use('/api/service-orders', require('./src/routes/serviceOrderRoutes'));
 app.use('/api/payments', require('./src/routes/paymentRoutes'));
 app.use('/api/feedback', require('./src/routes/feedbackRoutes'));
 
-// static uploads
+// Static uploads
 app.use('/uploads', express.static('uploads'));
 
-// error handler
+// Error handler middleware
 app.use(errorMiddleware);
 
 const PORT = process.env.PORT || 5000;
@@ -65,4 +76,5 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
+// Run Cron Jobs
 require("./src/cron/autoCancelBookings");
