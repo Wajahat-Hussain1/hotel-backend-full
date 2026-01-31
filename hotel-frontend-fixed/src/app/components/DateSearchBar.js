@@ -1,91 +1,9 @@
-// "use client";
-
-// import { useState } from "react";
-
-// export default function DateSearchBar({ onResults }) {
-//   const [checkIn, setCheckIn] = useState("");
-//   const [checkOut, setCheckOut] = useState("");
-//   const [loading, setLoading] = useState(false);
-
-//   const today = new Date().toISOString().split("T")[0];
-
-//   const handleSearch = async () => {
-//     if (!checkIn || !checkOut) {
-//       alert("Please select both check-in and check-out dates.");
-//       return;
-//     }
-
-//     setLoading(true);
-
-//     try {
-//       const res = await fetch("http://localhost:5000/api/rooms");
-//       const json = await res.json();
-
-//       const rooms = json.data ? json.data : [];
-
-//       // Only available rooms
-//       const available = rooms.filter(
-//         (r) => r.status !== "occupied" && r.status !== "maintenance"
-//       );
-
-//       onResults(available);
-//     } catch (err) {
-//       console.error("Error fetching rooms:", err);
-//       onResults([]);
-//     }
-
-//     setLoading(false);
-//   };
-
-//   return (
-//     <div className="bg-white shadow p-6 rounded-lg max-w-6xl mx-auto -mt-10 relative z-10 space-y-4">
-//       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-//         {/* Check-in date */}
-//         <div>
-//           <label className="font-medium text-gray-700">Check-in</label>
-//           <input
-//             type="date"
-//             className="w-full border px-3 py-2 rounded"
-//             min={today}
-//             value={checkIn}
-//             onChange={(e) => setCheckIn(e.target.value)}
-//           />
-//         </div>
-
-//         {/* Check-out date */}
-//         <div>
-//           <label className="font-medium text-gray-700">Check-out</label>
-//           <input
-//             type="date"
-//             className="w-full border px-3 py-2 rounded"
-//             min={checkIn || today}
-//             value={checkOut}
-//             onChange={(e) => setCheckOut(e.target.value)}
-//           />
-//         </div>
-
-//         {/* Button */}
-//         <div className="flex items-end">
-//           <button
-//             onClick={handleSearch}
-//             className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-//             disabled={loading}
-//           >
-//             {loading ? "Checking..." : "Search Rooms"}
-//           </button>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-
-
-// File: DateSearchBar.jsx (Size Reduced)
-
 "use client";
 
 import { useState } from "react";
+
+// Define API_URL to point to Render
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function DateSearchBar({ onResults }) {
   const [checkIn, setCheckIn] = useState("");
@@ -103,18 +21,20 @@ export default function DateSearchBar({ onResults }) {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/rooms");
+      // ✅ FIXED: Now fetching from Render instead of localhost
+      const res = await fetch(`${API_URL}/api/rooms`);
       const json = await res.json();
 
-      const rooms = json.data ? json.data : [];
+      const rooms = json.data ? json.data : json;
 
-      const available = rooms.filter(
-        (r) => r.status !== "occupied" && r.status !== "maintenance"
-      );
+      // Filter rooms that are ready for booking
+      const available = Array.isArray(rooms) 
+        ? rooms.filter((r) => r.status !== "occupied" && r.status !== "maintenance")
+        : [];
 
       onResults(available);
     } catch (err) {
-      console.error("Error fetching rooms:", err);
+      console.error("Error fetching available rooms:", err);
       onResults([]);
     }
 
@@ -122,10 +42,8 @@ export default function DateSearchBar({ onResults }) {
   };
 
   return (
-    // FIX 1: Max width kam ki (max-w-6xl -> max-w-4xl) aur padding kam ki (p-8 -> p-5)
     <div className="bg-white shadow-2xl p-5 rounded-2xl max-w-4xl mx-auto -mt-10 relative z-10 space-y-3 border border-gray-100 transform hover:scale-[1.01] transition-transform duration-300">
       
-      {/* Heading size thoda chota kiya */}
       <h2 className="text-lg font-bold text-slate-800 mb-3 flex items-center">
         <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
         Check Availability
@@ -139,7 +57,6 @@ export default function DateSearchBar({ onResults }) {
           <div className="relative">
              <input
                 type="date"
-                // FIX 2: Input padding kam ki (py-3 -> py-2.5)
                 className="w-full border-gray-300 border-2 px-3 py-2.5 rounded-xl text-sm focus:border-blue-500 focus:ring-blue-500 transition duration-150 cursor-pointer" 
                 min={today}
                 value={checkIn}
@@ -157,7 +74,6 @@ export default function DateSearchBar({ onResults }) {
           <div className="relative">
             <input
               type="date"
-              // FIX 2: Input padding kam ki (py-3 -> py-2.5)
               className="w-full border-gray-300 border-2 px-3 py-2.5 rounded-xl text-sm focus:border-blue-500 focus:ring-blue-500 transition duration-150 cursor-pointer"
               min={checkIn || today}
               value={checkOut}
@@ -173,7 +89,6 @@ export default function DateSearchBar({ onResults }) {
         <div className="flex items-end">
           <button
             onClick={handleSearch}
-            // FIX 3: Button padding kam ki (py-3 -> py-2.5) aur font size normal kiya
             className={`w-full text-white py-2.5 rounded-xl transition duration-150 font-semibold shadow-lg text-sm ${
               loading 
                 ? "bg-gray-400 cursor-not-allowed" 

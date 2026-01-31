@@ -5,6 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import Navbar from "../../components/Navbar";
 import QRCode from "qrcode";
 
+// ✅ Point to Render Backend
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
 /* ================= UTILITIES ================= */
 
 function fmtDateIso(iso) {
@@ -47,20 +50,22 @@ export default function InvoicePage() {
         const token = localStorage.getItem("hotel_token");
         if (!token) return router.push("/login");
 
-        const res = await fetch(`http://localhost:5000/api/invoice/${id}`, {
+        // ✅ UPDATED: Fetch from Render API
+        const res = await fetch(`${API_URL}/api/invoice/${id}`, {
           headers: { Authorization: "Bearer " + token },
         });
 
         if (!res.ok) throw new Error("Invoice not found");
 
         const json = await res.json();
-        setData(json.data);
+        const invoiceData = json.data || json; // Handle different API response structures
+        setData(invoiceData);
 
         const qr = await QRCode.toDataURL(
           JSON.stringify({
             booking_id: id,
-            total: json.data.grand_total,
-            status: json.data.booking_status,
+            total: invoiceData.grand_total,
+            status: invoiceData.booking_status,
           })
         );
         setQrDataUrl(qr);
@@ -82,8 +87,9 @@ export default function InvoicePage() {
   const downloadPdf = async () => {
     try {
       const token = localStorage.getItem("hotel_token");
+      // ✅ UPDATED: Fetch PDF from Render API
       const res = await fetch(
-        `http://localhost:5000/api/invoice/${id}/pdf`,
+        `${API_URL}/api/invoice/${id}/pdf`,
         { headers: { Authorization: "Bearer " + token } }
       );
 
@@ -94,7 +100,10 @@ export default function InvoicePage() {
       const a = document.createElement("a");
       a.href = url;
       a.download = `Invoice-${id}.pdf`;
+      document.body.appendChild(a); // Recommended for Firefox compatibility
       a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url); // Clean up memory
     } catch {
       alert("PDF download failed");
     }
@@ -109,10 +118,10 @@ export default function InvoicePage() {
       </div>
     );
 
-  if (error)
+  if (error || !data)
     return (
       <div className="min-h-screen flex items-center justify-center text-red-500">
-        {error}
+        {error || "Invoice data is missing"}
       </div>
     );
 
@@ -141,10 +150,10 @@ export default function InvoicePage() {
           </div>
 
           <div className="text-right">
-            <h2 className="text-2xl font-bold text-blue-700">INVOICE</h2>
-            <p className="font-semibold">#{data.booking_id}</p>
+            <h2 className="text-2xl font-bold text-blue-700 uppercase">Invoice</h2>
+            <p className="font-semibold text-gray-600">ID: #{data.booking_id}</p>
             <span
-              className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold ${
+              className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold uppercase ${
                 isPaid
                   ? "bg-green-100 text-green-700"
                   : "bg-orange-100 text-orange-700"
@@ -158,13 +167,13 @@ export default function InvoicePage() {
         {/* CUSTOMER */}
         <div className="px-8 grid grid-cols-2 gap-6 text-sm text-gray-700">
           <div>
-            <h3 className="font-bold mb-1">Billed To</h3>
-            <p>{data.first_name} {data.last_name}</p>
+            <h3 className="font-bold mb-1 text-gray-900">Billed To</h3>
+            <p className="text-base font-medium">{data.first_name} {data.last_name}</p>
             <p>{data.email}</p>
           </div>
 
           <div className="text-right">
-            <h3 className="font-bold mb-1">Stay Details</h3>
+            <h3 className="font-bold mb-1 text-gray-900">Stay Details</h3>
             <p>Room: {data.type_name} ({roomNo})</p>
             <p>Check-in: {fmtDateIso(data.check_in)}</p>
             <p>Check-out: {fmtDateIso(data.check_out)}</p>
@@ -175,19 +184,20 @@ export default function InvoicePage() {
         <div className="px-8 py-8 bg-gray-50 mt-6">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b font-bold text-gray-700">
+              <tr className="border-b-2 border-gray-200 font-bold text-gray-700">
                 <th className="py-2 text-left">Description</th>
                 <th className="py-2 text-right">Amount</th>
               </tr>
             </thead>
 
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {/* ROOM */}
-              <tr className="border-b">
-                <td className="py-3">
-                  Hotel Accommodation ({data.type_name})
+              <tr>
+                <td className="py-4">
+                  <span className="font-medium">Hotel Accommodation</span>
+                  <p className="text-xs text-gray-500">{data.type_name} Room</p>
                 </td>
-                <td className="py-3 text-right">
+                <td className="py-4 text-right">
                   {fmtCurrency(data.room_total)}
                 </td>
               </tr>
@@ -195,18 +205,12 @@ export default function InvoicePage() {
               {/* SERVICES */}
               {Array.isArray(data.services) && data.services.length > 0 && (
                 <>
-                  <tr>
-                    <td colSpan="2" className="pt-4 font-bold">
-                      Additional Services
-                    </td>
-                  </tr>
-
                   {data.services.map((s) => (
-                    <tr key={s.order_id} className="border-b">
-                      <td className="py-2">
-                        {s.service_name} × {s.quantity}
+                    <tr key={s.order_id || Math.random()}>
+                      <td className="py-3">
+                        {s.service_name} <span className="text-gray-400">× {s.quantity}</span>
                       </td>
-                      <td className="py-2 text-right">
+                      <td className="py-3 text-right">
                         {fmtCurrency(s.total)}
                       </td>
                     </tr>
@@ -217,19 +221,19 @@ export default function InvoicePage() {
 
             <tfoot>
               <tr>
-                <td className="pt-4 text-right font-semibold">
+                <td className="pt-6 text-right text-gray-500">
                   Services Total
                 </td>
-                <td className="pt-4 text-right font-semibold">
+                <td className="pt-6 text-right font-semibold">
                   {fmtCurrency(data.services_total)}
                 </td>
               </tr>
 
               <tr>
-                <td className="pt-4 text-right font-bold text-lg">
+                <td className="pt-2 text-right font-bold text-lg text-gray-800">
                   Grand Total
                 </td>
-                <td className="pt-4 text-right text-2xl font-extrabold text-blue-700">
+                <td className="pt-2 text-right text-2xl font-extrabold text-blue-700">
                   {fmtCurrency(data.grand_total)}
                 </td>
               </tr>
@@ -238,41 +242,46 @@ export default function InvoicePage() {
         </div>
 
         {/* FOOTER */}
-        <div className="p-8 flex justify-between items-center">
+        <div className="p-8 flex justify-between items-center border-t border-gray-100">
           {qrDataUrl && (
-            <img
-              src={qrDataUrl}
-              alt="QR"
-              className="w-20 h-20 border rounded"
-            />
+            <div className="text-center">
+                <img
+                    src={qrDataUrl}
+                    alt="Booking QR"
+                    className="w-20 h-20 border p-1 rounded bg-white"
+                />
+                <p className="text-[10px] text-gray-400 mt-1 uppercase">Verify Booking</p>
+            </div>
           )}
 
-          <p className="text-sm text-gray-500">
-            This is a system generated invoice
+          <p className="text-xs text-gray-400 italic">
+            Thank you for choosing The Velvet Door. This is a system generated invoice.
           </p>
         </div>
       </div>
 
       {/* ACTIONS */}
-      <div className="max-w-4xl mx-auto mt-6 flex justify-end gap-3 print:hidden">
+      <div className="max-w-4xl mx-auto mt-6 flex justify-end gap-3 print:hidden px-4">
         <button
           onClick={() => router.back()}
-          className="px-4 py-2 border rounded"
+          className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-white transition font-medium"
         >
           Back
         </button>
 
         <button
           onClick={handlePrint}
-          className="px-4 py-2 bg-gray-800 text-white rounded"
+          className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition font-medium flex items-center"
         >
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
           Print
         </button>
 
         <button
           onClick={downloadPdf}
-          className="px-4 py-2 bg-blue-600 text-white rounded"
+          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center shadow-md"
         >
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
           Download PDF
         </button>
       </div>
