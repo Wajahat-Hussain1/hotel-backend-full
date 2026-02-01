@@ -4,124 +4,52 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Sidebar from "../components/AdminSidebar";
 import { useRouter } from "next/navigation";
+import toast, { Toaster } from "react-hot-toast";
 
-// === Custom Components ===
-
-// Reusable Notification component
-const Notification = ({ message, type, onClose }) => {
-  if (!message) return null;
-  const bgColor = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
-  
-  useEffect(() => {
-      const timer = setTimeout(() => {
-          onClose();
-      }, 3000);
-      return () => clearTimeout(timer);
-  }, [message, onClose]);
-
-  return (
-    <div className={`fixed top-5 right-5 p-4 rounded-lg border shadow-lg font-medium max-w-sm z-50 ${bgColor}`}>
-      {message}
-    </div>
-  );
-};
-
-// Reusable Confirmation Modal
-const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
-                <h3 className="text-xl font-bold mb-4 text-gray-800">{title}</h3>
-                <p className="text-gray-600 mb-6">{message}</p>
-                <div className="flex justify-end space-x-3">
-                    <button
-                        onClick={onCancel}
-                        className="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={onConfirm}
-                        className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition"
-                    >
-                        Confirm
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-// === End Custom Components ===
-
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://hotel-backend-full.onrender.com";
 
 export default function StaffPage() {
   const router = useRouter();
   const [staff, setStaff] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState("active"); // active | inactive | all
-  const [notification, setNotification] = useState({ message: null, type: null });
-  const [confirmModal, setConfirmModal] = useState({ 
-    isOpen: false, 
-    id: null, 
-    status: null 
-  });
+  const [view, setView] = useState("all"); 
 
+  const token = typeof window !== "undefined" ? localStorage.getItem("hotel_token") : null;
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("hotel_token")
-      : null;
-
-  // Load staff
   useEffect(() => {
-    const load = async () => {
+    const loadStaff = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/staff", {
+        const res = await fetch(`${API_URL}/api/staff`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-
         const json = await res.json();
-        if (json.success !== false) setStaff(json.data || []);
+        if (json.success !== false) {
+          setStaff(json.data || []);
+        }
       } catch (err) {
-        console.error(err);
-        setNotification({ message: "Failed to load staff list.", type: "error" });
+        toast.error("Could not sync staff directory.");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
-
-    load();
+    loadStaff();
   }, [token]);
 
-  // Filter Logic
   const filtered = staff.filter((s) => {
-    if (view !== "all" && s.status !== view) return false;
-
-    return `${s.staff_id} ${s.name} ${s.role} ${s.email}`
+    const matchesView = view === "all" || s.status === view;
+    const matchesSearch = `${s.staff_id} ${s.name} ${s.role} ${s.email}`
       .toLowerCase()
       .includes(search.toLowerCase());
+    return matchesView && matchesSearch;
   });
 
-  // Toggle Active / Inactive
-  const toggleStatus = (id, currentStatus) => {
+  const handleToggleStatus = async (id, currentStatus) => {
     const newStatus = currentStatus === "active" ? "inactive" : "active";
-    setConfirmModal({
-        isOpen: true,
-        id: id,
-        status: newStatus,
-        title: `Confirm Status Change`,
-        message: `Are you sure you want to change this staff member's status to '${newStatus}'?`
-    });
-  };
-
-  const handleConfirmStatusChange = async () => {
-    const { id, status: newStatus } = confirmModal;
-    setConfirmModal({ isOpen: false, id: null, status: null });
+    const loadingToast = toast.loading(`Updating status to ${newStatus}...`);
 
     try {
-      const res = await fetch(`http://localhost:5000/api/staff/${id}`, {
+      const res = await fetch(`${API_URL}/api/staff/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -130,166 +58,149 @@ export default function StaffPage() {
         body: JSON.stringify({ status: newStatus }),
       });
 
-      const json = await res.json();
-      if (!res.ok) {
-        return setNotification({ message: json.message || "Status update failed", type: "error" });
+      if (res.ok) {
+        setStaff((prev) =>
+          prev.map((s) => (s.staff_id === id ? { ...s, status: newStatus } : s))
+        );
+        toast.success(`Staff ID #${id} is now ${newStatus}`, { id: loadingToast });
+      } else {
+        toast.error("Status update failed.", { id: loadingToast });
       }
-
-      setStaff((prev) =>
-        prev.map((s) =>
-          s.staff_id === id ? { ...s, status: newStatus } : s
-        )
-      );
-
-      setNotification({ message: `Staff is now ${newStatus.toUpperCase()}!`, type: "success" });
     } catch (err) {
-      console.error(err);
-      setNotification({ message: "Status update failed due to connection error.", type: "error" });
+      toast.error("Connection error.", { id: loadingToast });
     }
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-slate-50 font-sans">
+      <Toaster position="top-right" />
       <Sidebar active="staff" />
-      <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: null, type: null })} />
-      <ConfirmationModal 
-        isOpen={confirmModal.isOpen}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        onConfirm={handleConfirmStatusChange}
-        onCancel={() => setConfirmModal({ isOpen: false, id: null, status: null })}
-      />
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 p-10">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-4xl font-extrabold text-gray-800">Staff Members</h1>
+      <main className="flex-1 p-6 lg:p-12">
+        {/* HEADER SECTION */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+          <div>
+            <h1 className="text-5xl font-black text-slate-900 tracking-tighter">
+              Personnel <span className="text-indigo-600 italic">Directory</span>
+            </h1>
+            <p className="text-slate-500 font-medium mt-2">Manage access levels and employee records.</p>
+          </div>
 
           <Link
             href="/admin/staff/add"
-            className="px-6 py-3 bg-purple-600 text-white rounded-xl shadow-lg hover:bg-purple-700 transition font-semibold flex items-center space-x-2"
+            className="group flex items-center gap-3 px-8 py-4 bg-slate-900 text-white rounded-[2rem] hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-            </svg>
-            <span>Add New Staff</span>
+            <span className="font-black uppercase tracking-widest text-xs">Add New Member</span>
+            <div className="bg-white/20 p-1 rounded-full group-hover:rotate-90 transition-transform">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" /></svg>
+            </div>
           </Link>
         </div>
 
-        {/* CONTROLS (SEARCH & TABS) */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 space-y-4 md:space-y-0">
-            {/* FILTER TABS */}
-            <div className="flex bg-white p-1 rounded-xl shadow-md border border-gray-100">
-                {["active", "inactive", "all"].map((tab) => (
+        {/* UTILITIES BAR */}
+        <div className="flex flex-col lg:flex-row gap-4 mb-8">
+            <div className="flex-1 relative group">
+                <svg className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <input
+                    type="text"
+                    placeholder="Search by ID, Role, or Name..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-14 pr-6 py-5 bg-white border-none rounded-[2rem] font-bold text-slate-800 shadow-sm focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+                />
+            </div>
+
+            <div className="flex bg-white p-2 rounded-[2rem] shadow-sm">
+                {["all", "active", "inactive"].map((tab) => (
                     <button
                         key={tab}
                         onClick={() => setView(tab)}
-                        className={`px-4 py-2 capitalize font-semibold rounded-lg transition duration-200 text-sm
-                        ${view === tab
-                            ? "bg-purple-600 text-white shadow-purple-300 shadow-md"
-                            : "text-gray-600 hover:bg-gray-100"
+                        className={`px-8 py-3 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest transition-all ${
+                            view === tab ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" : "text-slate-400 hover:text-slate-600"
                         }`}
                     >
                         {tab}
                     </button>
                 ))}
             </div>
-
-            {/* SEARCH */}
-            <input
-                type="text"
-                placeholder="Search by ID, Name, Role, or Email..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full md:w-80 px-4 py-2.5 border border-gray-300 rounded-xl shadow-sm focus:ring-purple-500 focus:border-purple-500 transition"
-            />
         </div>
 
-        {/* TABLE */}
-        <div className="bg-white shadow-xl rounded-2xl border border-gray-100 overflow-x-auto">
-          <table className="min-w-full text-left">
-            <thead className="bg-gray-100 text-gray-700 uppercase text-xs tracking-wider">
-              <tr>
-                <th className="p-4 font-bold">ID</th>
-                <th className="p-4 font-bold">Name</th>
-                <th className="p-4 font-bold">Email</th>
-                <th className="p-4 font-bold">Role</th>
-                <th className="p-4 font-bold">Phone</th>
-                <th className="p-4 font-bold">Salary (PKR)</th>
-                <th className="p-4 font-bold">Status</th>
-                <th className="p-4 font-bold text-center">Actions</th>
+        {/* DATA TABLE */}
+        <div className="bg-white rounded-[3rem] shadow-2xl shadow-slate-200/60 border border-white overflow-hidden">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-50">
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">ID</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Member Info</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Department</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Salary</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Actions</th>
               </tr>
             </thead>
-
-            <tbody>
+            <tbody className="divide-y divide-slate-50">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="p-6 text-center text-lg text-gray-500 animate-pulse">
-                    Loading staff data...
+                  <td colSpan={6} className="py-20 text-center">
+                    <div className="inline-block w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-6 text-center text-lg text-red-500">
-                    No staff members match the current filter.
-                  </td>
+                  <td colSpan={6} className="py-20 text-center font-bold text-slate-400 italic">No records found matching your criteria.</td>
                 </tr>
               ) : (
                 filtered.map((s) => (
-                  <tr key={s.staff_id} className="border-t border-gray-100 hover:bg-gray-50 transition duration-150">
-                    <td className="p-4 font-extrabold text-sm text-purple-600">{s.staff_id}</td>
-                    <td className="p-4 font-medium">{s.name}</td>
-                    <td className="p-4 text-sm">{s.email}</td>
-                    <td className="p-4 capitalize text-sm">{s.role}</td>
-                    <td className="p-4 text-sm">{s.phone}</td>
-
-                    <td className="p-4 font-semibold text-sm text-green-700">
-                      PKR {Number(s.salary).toLocaleString()}
+                  <tr key={s.staff_id} className="group hover:bg-slate-50 transition-colors">
+                    <td className="px-8 py-6 font-black text-slate-400 group-hover:text-indigo-600 transition-colors">#{s.staff_id}</td>
+                    <td className="px-8 py-6">
+                      <div className="flex flex-col">
+                        <span className="font-black text-slate-900 tracking-tight">{s.name}</span>
+                        <span className="text-xs text-slate-400 font-medium italic">{s.email}</span>
+                      </div>
                     </td>
-
-                    <td className="p-4">
-                      {s.status === "active" ? (
-                        <span className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded-full font-bold">
-                          Active
+                    <td className="px-8 py-6">
+                        <span className="px-4 py-1.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
+                            {s.role}
                         </span>
-                      ) : (
-                        <span className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-full font-bold">
-                          Inactive
-                        </span>
-                      )}
                     </td>
-
-                    {/* ACTION BUTTONS */}
-                    <td className="p-4 text-center">
+                    <td className="px-8 py-6">
+                        <span className="font-black text-slate-900 tracking-tighter">PKR {Number(s.salary).toLocaleString()}</span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${s.status === 'active' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-slate-300'}`}></div>
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${s.status === 'active' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {s.status}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
                       <div className="flex items-center justify-center gap-2">
                         <Link
                           href={`/admin/staff/${s.staff_id}/edit`}
-                          className="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition shadow-sm"
-                          title="Edit Staff Details"
+                          className="p-3 bg-white border border-slate-100 rounded-2xl text-slate-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg transition-all"
                         >
-                            Edit
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                         </Link>
                         
-                        <Link
-                            href={`/admin/staff/${s.staff_id}/delete`}
-                            className="px-3 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 transition shadow-sm"
-                            title="Delete Staff Record"
-                        >
-                            Delete
-                        </Link>
-
                         <button
-                          onClick={() => toggleStatus(s.staff_id, s.status)}
-                          className={`px-3 py-2 text-sm rounded-lg text-white font-semibold transition shadow-sm
-                          ${
-                            s.status === "active"
-                              ? "bg-yellow-500 hover:bg-yellow-600"
-                              : "bg-green-600 hover:bg-green-700"
+                          onClick={() => handleToggleStatus(s.staff_id, s.status)}
+                          className={`p-3 border rounded-2xl transition-all ${
+                            s.status === "active" 
+                            ? "bg-white border-slate-100 text-slate-400 hover:text-rose-500 hover:border-rose-100" 
+                            : "bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-600 hover:text-white"
                           }`}
-                          title={s.status === "active" ? "Deactivate Staff" : "Activate Staff"}
                         >
-                          {s.status === "active" ? "Deactivate" : "Activate"}
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
                         </button>
+
+                        <Link
+                          href={`/admin/staff/${s.staff_id}/delete`}
+                          className="p-3 bg-white border border-slate-100 rounded-2xl text-slate-400 hover:text-rose-600 hover:border-rose-100 hover:shadow-lg transition-all"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </Link>
                       </div>
                     </td>
                   </tr>

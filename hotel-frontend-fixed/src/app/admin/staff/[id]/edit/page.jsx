@@ -3,35 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Sidebar from "../../../components/AdminSidebar";
+import toast, { Toaster } from "react-hot-toast";
 
-// === Custom Notification Component (copied for consistency) ===
-const Notification = ({ message, type, onClose }) => {
-    if (!message) return null;
-    const bgColor = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
-    
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            onClose();
-        }, 3000);
-        return () => clearTimeout(timer);
-    }, [message, onClose]);
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://hotel-backend-full.onrender.com";
 
-    return (
-        <div 
-            className={`fixed top-5 right-5 p-4 rounded-lg border shadow-lg font-medium max-w-sm z-50 transition-opacity duration-300 ease-in-out ${bgColor}`}
-            role="alert"
-        >
-          <div className="flex justify-between items-start">
-              {message}
-              <button className="ml-4 font-bold text-lg leading-none" onClick={onClose}>&times;</button>
-          </div>
-        </div>
-    );
-};
-// === End Custom Notification Component ===
-
-
-// Convert DB timestamp → HTML (YYYY-MM-DD)
 const formatDate = (d) => {
   if (!d) return "";
   const date = new Date(d);
@@ -48,54 +23,37 @@ export default function EditStaffPage() {
   const [staff, setStaff] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
-  const [notification, setNotification] = useState({ message: null, type: null });
 
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("hotel_token") : null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("hotel_token") : null;
 
-  // List of all staff roles for the dropdown
   const staffRoles = [
-      "manager", 
-      "receptionist", 
-      "security", 
-      "driver", 
-      "chef", 
-      "cleaner", 
-      "technician",
-      "housekeeping"
+    "manager", "receptionist", "security", "driver", 
+    "chef", "cleaner", "technician", "housekeeping"
   ];
 
-
-  // Load staff details
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/staff/${id}`, {
+        const res = await fetch(`${API_URL}/api/staff/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-
         const json = await res.json();
 
         if (!res.ok) {
-          setNotification({ message: json.message || "Failed to load staff data.", type: "error" });
+          toast.error("Staff member not found.");
           return router.push("/admin/staff");
         }
 
-        // FIX: convert hired_date before storing
-        const fixedData = {
+        setStaff({
           ...json.data,
           hired_date: formatDate(json.data.hired_date),
-        };
-
-        setStaff(fixedData);
+        });
       } catch (err) {
-        console.error(err);
-        setNotification({ message: "Network error: Failed to load staff data.", type: "error" });
+        toast.error("Failed to sync with server.");
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
-
     load();
   }, [id, router, token]);
 
@@ -105,162 +63,186 @@ export default function EditStaffPage() {
 
   const submitForm = async (e) => {
     e.preventDefault();
-    setUpdating(true);
-
-    // Frontend validation check
     if (!staff.name || !staff.email || !staff.role) {
-        setNotification({ message: "Name, Email, and Role are required fields.", type: "error" });
-        setUpdating(false);
-        return;
+      return toast.error("Please fill all required fields.");
     }
 
+    setUpdating(true);
+    const loadingToast = toast.loading("Updating personnel record...");
 
     try {
-      const res = await fetch(`http://localhost:5000/api/staff/${id}`, {
+      const res = await fetch(`${API_URL}/api/staff/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        // Send only the required fields, including optional password if present
         body: JSON.stringify({
-            name: staff.name,
-            email: staff.email,
-            phone: staff.phone,
-            salary: staff.salary,
-            hired_date: staff.hired_date,
-            role: staff.role,
-            // Only include password if the user entered a new one
-            ...(staff.password && { password: staff.password })
+          name: staff.name,
+          email: staff.email,
+          phone: staff.phone,
+          salary: staff.salary,
+          hired_date: staff.hired_date,
+          role: staff.role,
+          ...(staff.password && { password: staff.password })
         }),
       });
 
-      const json = await res.json();
-
-      if (!res.ok) {
-          setNotification({ message: json.message || "Staff update failed.", type: "error" });
-          setUpdating(false);
-          return;
+      if (res.ok) {
+        toast.success("Staff profile updated!", { id: loadingToast });
+        setTimeout(() => router.push("/admin/staff"), 1500);
+      } else {
+        const json = await res.json();
+        toast.error(json.message || "Update failed.", { id: loadingToast });
+        setUpdating(false);
       }
-
-      setNotification({ message: "Staff details updated successfully!", type: "success" });
-      
-      // Redirect after showing success notification
-      setTimeout(() => {
-        router.push("/admin/staff");
-      }, 1500);
-
     } catch (err) {
-      console.error(err);
-      setNotification({ message: "Network error: Update failed.", type: "error" });
+      toast.error("Network error during update.", { id: loadingToast });
       setUpdating(false);
     }
   };
 
   if (loading || !staff) {
-      return (
-          <div className="flex min-h-screen bg-gray-50 items-center justify-center">
-              <p className="text-gray-500 animate-pulse text-xl font-medium">Loading staff data...</p>
-          </div>
-      );
+    return (
+      <div className="flex min-h-screen bg-slate-50 items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-slate-400 font-black text-xs uppercase tracking-widest">Fetching Profile...</span>
+        </div>
+      </div>
+    );
   }
 
-
   return (
-    <div className="flex min-h-screen bg-gray-50 text-gray-800">
+    <div className="flex min-h-screen bg-slate-50 font-sans">
+      <Toaster position="top-right" />
       <Sidebar active="staff" />
-      <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: null, type: null })} />
 
-      <main className="flex-1 p-10">
-        <div className="flex justify-between items-center mb-8 border-b pb-4">
-            <h1 className="text-4xl font-extrabold text-gray-800">
-                Edit Staff Member <span className="text-purple-600">#{id}</span>
+      <main className="flex-1 p-6 lg:p-12 max-w-[1200px] mx-auto w-full">
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
+          <div>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tighter">
+              Edit <span className="text-indigo-600 italic">Personnel</span>
             </h1>
-            <button
-                onClick={() => router.push(`/admin/staff`)}
-                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition flex items-center space-x-2"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                <span>Back to Staff List</span>
-            </button>
+            <p className="text-slate-500 font-medium uppercase text-[10px] tracking-[0.2em] mt-1">
+               System ID: <span className="text-slate-900">#STF-{id}</span>
+            </p>
+          </div>
+          <button
+            onClick={() => router.push("/admin/staff")}
+            className="flex items-center gap-2 px-6 py-2.5 bg-white text-slate-600 font-bold rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            Cancel
+          </button>
         </div>
 
-        <form
-          onSubmit={submitForm}
-          className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100 max-w-2xl mx-auto"
-        >
-          {/* BASIC FIELDS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-            {[
-              { label: "Full Name", key: "name", type: "text", required: true },
-              { label: "Email Address", key: "email", type: "email", required: true },
-              { label: "Phone Number", key: "phone", type: "text", required: false },
-              { label: "Salary (PKR)", key: "salary", type: "number", required: false },
-              { label: "Hired Date", key: "hired_date", type: "date", required: false },
-            ].map((item) => (
-              <div className="space-y-1" key={item.key}>
-                <label className="block text-sm font-medium text-gray-700">
-                    {item.label} 
-                    {item.required && <span className="text-red-500">*</span>}
-                </label>
-                <input
-                  type={item.type}
-                  value={staff[item.key] || ""}
-                  onChange={(e) => updateField(item.key, e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500 transition"
-                  required={item.required}
-                  // Added key check for salary to prevent minus sign
-                  {...(item.key === 'salary' && { min: "0" })}
-                />
+        {/* FORM CARD */}
+        <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-white overflow-hidden p-8 lg:p-12">
+          <form onSubmit={submitForm} className="max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              
+              {/* Profile Details Section */}
+              <div className="space-y-6">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b pb-2">Identity & Contact</h3>
+                
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Full Name *</label>
+                  <input
+                    type="text"
+                    value={staff.name}
+                    onChange={(e) => updateField("name", e.target.value)}
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Official Email *</label>
+                  <input
+                    type="email"
+                    value={staff.email}
+                    onChange={(e) => updateField("email", e.target.value)}
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Contact Phone</label>
+                  <input
+                    type="text"
+                    value={staff.phone || ""}
+                    onChange={(e) => updateField("phone", e.target.value)}
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                  />
+                </div>
               </div>
-            ))}
-          </div>
-          
-          {/* ROLE - Full width */}
-          <div className="mt-5 space-y-1">
-            <label className="block text-sm font-medium text-gray-700">
-                Role <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={staff.role}
-              onChange={(e) => updateField("role", e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500 transition bg-white appearance-none"
-              required
-            >
-              {staffRoles.map(role => (
-                  <option key={role} value={role} className="capitalize">{role}</option>
-              ))}
-            </select>
-          </div>
 
-          {/* PASSWORD OPTIONAL - Full width */}
-          <div className="mt-5 space-y-1">
-            <label className="block text-sm font-medium text-gray-700">New Password (optional)</label>
-            <input
-              type="password"
-              placeholder="Enter new password to change, leave empty to keep old one"
-              // Note: We intentionally don't set 'value' here for security reasons.
-              onChange={(e) => updateField("password", e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500 transition"
-            />
-          </div>
+              {/* Administrative Section */}
+              <div className="space-y-6">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b pb-2">Employment & Access</h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Monthly Salary</label>
+                        <input
+                            type="number"
+                            value={staff.salary || ""}
+                            onChange={(e) => updateField("salary", e.target.value)}
+                            min="0"
+                            className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Hired On</label>
+                        <input
+                            type="date"
+                            value={staff.hired_date || ""}
+                            onChange={(e) => updateField("hired_date", e.target.value)}
+                            className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                        />
+                    </div>
+                </div>
 
-          {/* SUBMIT */}
-          <button
-            type="submit"
-            disabled={updating}
-            className="w-full mt-8 py-3 bg-purple-600 text-white rounded-xl font-semibold text-lg hover:bg-purple-700 transition shadow-md disabled:bg-purple-300 disabled:cursor-not-allowed flex items-center justify-center"
-          >
-            {updating ? (
-                 <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-            ) : "Update Staff Details"}
-          </button>
-        </form>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Staff Role *</label>
+                  <select
+                    value={staff.role}
+                    onChange={(e) => updateField("role", e.target.value)}
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none cursor-pointer"
+                    required
+                  >
+                    {staffRoles.map(role => (
+                        <option key={role} value={role} className="capitalize text-slate-900">{role}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Reset Password</label>
+                  <input
+                    type="password"
+                    placeholder="Enter new password or leave empty"
+                    onChange={(e) => updateField("password", e.target.value)}
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-12 pt-8 border-t border-slate-50 flex justify-end">
+              <button
+                type="submit"
+                disabled={updating}
+                className="w-full md:w-auto px-12 py-4 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100 disabled:opacity-50"
+              >
+                {updating ? "Committing Changes..." : "Save Personnel Record"}
+              </button>
+            </div>
+          </form>
+        </div>
       </main>
     </div>
   );

@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Sidebar from "../../../components/AdminSidebar";
+import toast, { Toaster } from "react-hot-toast";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://hotel-backend-full.onrender.com";
 
 export default function EditPaymentPage() {
   const { id } = useParams();
@@ -11,38 +14,33 @@ export default function EditPaymentPage() {
   const [payment, setPayment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [message, setMessage] = useState(null); // For custom notification
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("hotel_token")
-      : null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("hotel_token") : null;
 
   // Load existing payment
   useEffect(() => {
     const loadPayment = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/payments/${id}`, {
+        const res = await fetch(`${API_URL}/api/payments/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
         const json = await res.json();
         if (!res.ok) {
-          // alert hata diya gaya hai
-          console.error(json.message || "Failed to load payment");
+          toast.error(json.message || "Failed to load payment");
           return router.push("/admin/payments");
         }
 
         setPayment(json.data);
       } catch (err) {
         console.error(err);
-        // alert hata diya gaya hai
+        toast.error("Network error fetching payment details");
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
-    loadPayment();
+    if (token) loadPayment();
   }, [id, router, token]);
 
   const updateField = (key, value) => {
@@ -52,10 +50,10 @@ export default function EditPaymentPage() {
   const submitForm = async (e) => {
     e.preventDefault();
     setIsUpdating(true);
-    setMessage(null);
+    const updateToast = toast.loading("Syncing financial records...");
 
     try {
-      const res = await fetch(`http://localhost:5000/api/payments/${id}`, {
+      const res = await fetch(`${API_URL}/api/payments/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -67,160 +65,140 @@ export default function EditPaymentPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        setMessage({ type: 'error', text: json.message || "Update failed" });
+        toast.error(json.message || "Update failed", { id: updateToast });
         setIsUpdating(false);
         return;
       }
 
-      setMessage({ type: 'success', text: "Payment updated successfully!" });
-      // Notification dikhane ke liye thoda rukte hain, phir redirect karte hain
+      toast.success("Payment record updated!", { id: updateToast });
       setTimeout(() => {
         router.push("/admin/payments");
-      }, 1500);
+      }, 1000);
 
     } catch (err) {
-      console.error(err);
-      setMessage({ type: 'error', text: "Update failed due to an error" });
+      toast.error("Update failed due to a server error", { id: updateToast });
       setIsUpdating(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="flex min-h-screen bg-gray-50 items-center justify-center">
-        <p className="text-gray-500 animate-pulse text-xl font-medium">Loading payment details...</p>
+      <div className="flex min-h-screen bg-slate-50 items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+            <p className="text-slate-500 font-bold tracking-tight">Accessing Ledger...</p>
+        </div>
       </div>
     );
   }
 
-  if (!payment)
-    return (
-      <div className="flex min-h-screen bg-gray-50 items-center justify-center">
-        <p className="p-10 text-red-600 font-semibold text-xl">Payment not found or access denied.</p>
-      </div>
-    );
+  if (!payment) return null;
 
   return (
-    <div className="flex min-h-screen bg-gray-50 text-gray-800">
+    <div className="flex min-h-screen bg-slate-50 text-slate-800">
       <Sidebar active="payments" />
+      <Toaster position="top-right" />
 
-      <main className="flex-1 p-10 flex justify-center">
+      <main className="flex-1 p-6 lg:p-12 flex flex-col items-center">
         <div className="w-full max-w-2xl">
-          <h1 className="text-3xl font-extrabold text-gray-800 mb-8">
-            Edit Payment <span className="text-gray-400 font-light">#{id}</span>
-          </h1>
-
-          {/* Custom Notification Message */}
-          {message && (
-            <div className={`p-4 mb-6 rounded-lg font-medium ${
-              message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-            }`}>
-              {message.text}
-            </div>
-          )}
+          <div className="mb-10">
+            <button 
+                onClick={() => router.back()}
+                className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-purple-600 transition-colors mb-4 block"
+            >
+                ← Return to List
+            </button>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tight">
+                Edit Transaction <span className="text-purple-600">#{id}</span>
+            </h1>
+            <p className="text-slate-500 font-medium mt-1 text-sm">Update processing status or adjust the final amounts.</p>
+          </div>
 
           <form
             onSubmit={submitForm}
-            className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100 space-y-6"
+            className="bg-white p-10 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 space-y-8"
           >
-            {/* Disabled ID Fields */}
-            <div className="grid grid-cols-2 gap-6">
+            {/* ID Information Header */}
+            <div className="grid grid-cols-2 gap-4 p-6 bg-slate-50 rounded-3xl border border-slate-100">
                 <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Payment ID</label>
-                    <input
-                    disabled
-                    value={payment.payment_id}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-gray-100 text-gray-500 cursor-not-allowed"
-                    />
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Internal Reference</label>
+                    <p className="font-bold text-slate-700 font-mono">PAY-{payment.payment_id}</p>
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Booking ID</label>
-                    <input
-                    disabled
-                    value={payment.booking_id}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-gray-100 text-gray-500 cursor-not-allowed"
-                    />
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Associated Booking</label>
+                    <p className="font-bold text-slate-700 font-mono">BOK-{payment.booking_id}</p>
                 </div>
             </div>
 
-            {/* Amount */}
+            {/* Amount Input */}
             <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Amount (PKR)</label>
-                <input
-                type="number"
-                value={payment.amount}
-                onChange={(e) => updateField("amount", e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-purple-500 focus:border-purple-500 transition duration-150"
-                required
-                />
+                <label className="block text-xs font-black text-slate-900 uppercase tracking-widest mb-3 ml-1">Transaction Amount (PKR)</label>
+                <div className="relative">
+                    <span className="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-slate-400">Rs.</span>
+                    <input
+                        type="number"
+                        value={payment.amount}
+                        onChange={(e) => updateField("amount", e.target.value)}
+                        className="w-full pl-14 pr-6 py-4 border-2 border-slate-100 rounded-2xl focus:border-purple-500 focus:ring-0 transition-all font-black text-xl text-slate-900 outline-none"
+                        required
+                    />
+                </div>
             </div>
 
-            {/* Payment Method */}
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Payment Method */}
                 <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Payment Method</label>
+                    <label className="block text-xs font-black text-slate-900 uppercase tracking-widest mb-3 ml-1">Payment Method</label>
                     <select
-                    value={payment.payment_method}
-                    onChange={(e) => updateField("payment_method", e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white focus:ring-purple-500 focus:border-purple-500 transition duration-150 appearance-none"
+                        value={payment.payment_method}
+                        onChange={(e) => updateField("payment_method", e.target.value)}
+                        className="w-full px-5 py-4 border-2 border-slate-100 rounded-2xl bg-white font-bold text-slate-700 focus:border-purple-500 transition-all outline-none appearance-none"
                     >
-                    <option value="cash">Cash</option>
-                    <option value="card">Card</option>
-                    <option value="bank">Bank Transfer</option>
+                        <option value="cash">💵 Cash Payment</option>
+                        <option value="card">💳 Credit/Debit Card</option>
+                        <option value="bank">🏛️ Bank Transfer</option>
                     </select>
                 </div>
 
-                {/* Payment Status */}
+                {/* Status */}
                 <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Payment Status</label>
+                    <label className="block text-xs font-black text-slate-900 uppercase tracking-widest mb-3 ml-1">Current Status</label>
                     <select
-                    value={payment.payment_status}
-                    onChange={(e) => updateField("payment_status", e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white focus:ring-purple-500 focus:border-purple-500 transition duration-150 appearance-none"
+                        value={payment.payment_status}
+                        onChange={(e) => updateField("payment_status", e.target.value)}
+                        className={`w-full px-5 py-4 border-2 rounded-2xl bg-white font-bold focus:ring-0 transition-all outline-none appearance-none ${
+                            payment.payment_status === 'paid' ? 'border-emerald-100 text-emerald-600' : 
+                            payment.payment_status === 'refunded' ? 'border-amber-100 text-amber-600' : 'border-rose-100 text-rose-600'
+                        }`}
                     >
-                    <option value="paid">Paid</option>
-                    <option value="refunded">Refunded</option>
-                    <option value="failed">Failed</option>
+                        <option value="paid">✅ Paid / Received</option>
+                        <option value="refunded">🔄 Refunded</option>
+                        <option value="failed">❌ Payment Failed</option>
                     </select>
                 </div>
             </div>
 
-            {/* Cancel Until */}
-            <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Cancel Until (Read-Only)</label>
-                <input
-                    type="text"
-                    disabled
-                    value={payment.cancel_until || 'N/A'}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-100 text-gray-500 cursor-not-allowed"
-                />
+            {/* Read Only Meta */}
+            <div className="pt-4 border-t border-slate-50 flex items-center justify-between text-[11px] text-slate-400 font-bold uppercase tracking-tight">
+                <span>Created At: {new Date(payment.created_at).toLocaleDateString()}</span>
+                <span>Cancellation Deadline: {payment.cancel_until || 'No limit'}</span>
             </div>
 
-            <div className="flex space-x-4 pt-4">
+            <div className="flex flex-col md:flex-row gap-4">
                 <button
                     type="submit"
                     disabled={isUpdating}
-                    className="flex-1 py-3.5 bg-purple-600 text-white rounded-xl font-bold transition-all hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed shadow-lg shadow-purple-200 active:scale-[0.99]"
+                    className="flex-[2] py-4 bg-purple-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all hover:bg-purple-700 hover:shadow-xl hover:shadow-purple-200 disabled:bg-purple-300 disabled:cursor-not-allowed active:scale-[0.98]"
                 >
-                    {isUpdating ? (
-                        <>
-                            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Updating...
-                        </>
-                    ) : (
-                        "Update Payment Details"
-                    )}
+                    {isUpdating ? "Processing Update..." : "Confirm & Save Changes"}
                 </button>
 
                 <button
                     type="button"
                     onClick={() => router.push("/admin/payments")}
-                    className="w-32 py-3.5 bg-gray-200 text-gray-700 rounded-xl font-bold transition-all hover:bg-gray-300 active:scale-[0.99]"
+                    className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-sm uppercase tracking-widest transition-all hover:bg-slate-200 active:scale-[0.98]"
                 >
-                    Cancel
+                    Discard
                 </button>
             </div>
           </form>

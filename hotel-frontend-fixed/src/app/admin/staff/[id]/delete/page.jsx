@@ -3,33 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Sidebar from "../../../components/AdminSidebar";
+import toast, { Toaster } from "react-hot-toast";
 
-// === Custom Notification Component ===
-const Notification = ({ message, type, onClose }) => {
-    if (!message) return null;
-    const bgColor = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
-    
-    // Auto-close after 3 seconds
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            onClose();
-        }, 3000);
-        return () => clearTimeout(timer);
-    }, [message, onClose]);
-
-    return (
-        <div 
-            className={`fixed top-5 right-5 p-4 rounded-lg border shadow-lg font-medium max-w-sm z-50 transition-opacity duration-300 ease-in-out ${bgColor}`}
-            role="alert"
-        >
-          <div className="flex justify-between items-start">
-              {message}
-              <button className="ml-4 font-bold text-lg leading-none" onClick={onClose}>&times;</button>
-          </div>
-        </div>
-    );
-};
-// === End Custom Notification Component ===
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://hotel-backend-full.onrender.com";
 
 export default function DeleteStaffPage() {
   const router = useRouter();
@@ -38,170 +14,135 @@ export default function DeleteStaffPage() {
   const [staff, setStaff] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
-  const [notification, setNotification] = useState({ message: null, type: null });
 
+  const token = typeof window !== "undefined" ? localStorage.getItem("hotel_token") : null;
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("hotel_token")
-      : null;
-
-  // Load staff info to show in delete UI
   useEffect(() => {
     const loadStaff = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/staff/${id}`, {
+        const res = await fetch(`${API_URL}/api/staff/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-
         const json = await res.json();
 
         if (!res.ok) {
-          setNotification({ message: json.message || "Staff details failed to load.", type: "error" });
-          // Redirect after showing error
-          setTimeout(() => router.push("/admin/staff"), 1500);
+          toast.error(json.message || "Staff not found.");
+          setTimeout(() => router.push("/admin/staff"), 2000);
           return;
         }
-
         setStaff(json.data);
       } catch (err) {
-        console.error(err);
-        setNotification({ message: "Network error: Failed to connect to server.", type: "error" });
+        toast.error("Network error: Connection failed.");
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
-
     loadStaff();
   }, [id, router, token]);
 
-
-  // -------- DELETE STAFF FUNCTION --------
   const deleteStaff = async () => {
     setDeleting(true);
+    const loadingToast = toast.loading("Processing deletion...");
 
     try {
-      const res = await fetch(`http://localhost:5000/api/staff/${id}`, {
+      const res = await fetch(`${API_URL}/api/staff/${id}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      const json = await res.json();
-
-      if (!res.ok) {
-        setNotification({ message: json.message || "Failed to delete staff member.", type: "error" });
+      if (res.ok) {
+        toast.success("Record purged successfully", { id: loadingToast });
+        setTimeout(() => router.push("/admin/staff"), 1500);
+      } else {
+        const json = await res.json();
+        toast.error(json.message || "Deletion failed", { id: loadingToast });
         setDeleting(false);
-        return;
       }
-
-      setNotification({ message: "Staff member deleted successfully!", type: "success" });
-      
-      // Redirect to staff list after successful deletion
-      setTimeout(() => {
-        router.push("/admin/staff");
-      }, 1500);
-
     } catch (err) {
-      console.error(err);
-      setNotification({ message: "Failed to delete staff due to network error.", type: "error" });
+      toast.error("Critical server error", { id: loadingToast });
       setDeleting(false);
     }
   };
 
-
   if (loading) {
-      return (
-          <div className="flex min-h-screen bg-gray-50 items-center justify-center">
-              <p className="text-gray-500 animate-pulse text-xl font-medium">Loading staff details...</p>
-          </div>
-      );
-  }
-
-  if (!staff) {
-      return (
-          <div className="flex min-h-screen bg-gray-50 text-gray-800">
-              <Sidebar active="staff" />
-              <main className="flex-1 p-10">
-                  <p className="text-red-600 font-semibold text-xl">Staff member not found or error occurred.</p>
-                  <button
-                      onClick={() => router.push("/admin/staff")}
-                      className="mt-4 px-5 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition"
-                  >
-                      Go Back
-                  </button>
-              </main>
-          </div>
-      );
+    return (
+      <div className="flex min-h-screen bg-slate-50 items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-400 font-black tracking-widest uppercase text-xs">Verifying Identity...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50 text-gray-800">
+    <div className="flex min-h-screen bg-slate-50 font-sans">
+      <Toaster position="top-right" />
       <Sidebar active="staff" />
-      <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: null, type: null })} />
 
-      <main className="flex-1 p-10">
-        <div className="flex justify-between items-center mb-8 border-b pb-4">
-            <h1 className="text-4xl font-extrabold text-gray-800">
-                Delete Staff Record <span className="text-red-600">#{id}</span>
-            </h1>
+      <main className="flex-1 p-6 lg:p-12 max-w-[1000px] mx-auto w-full">
+        {/* HEADER */}
+        <div className="flex items-center justify-between mb-12">
+            <div>
+                <h1 className="text-4xl font-black text-slate-900 tracking-tighter">
+                    Terminate <span className="text-rose-600 text-3xl font-bold uppercase tracking-widest ml-2 italic">Record</span>
+                </h1>
+                <p className="text-slate-500 font-medium">Internal Employee ID: {id}</p>
+            </div>
             <button
-                onClick={() => router.push(`/admin/staff`)}
-                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition flex items-center space-x-2"
+                onClick={() => router.push("/admin/staff")}
+                className="px-5 py-2 text-slate-400 font-bold hover:text-slate-900 transition-colors flex items-center gap-2"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                <span>Back to Staff List</span>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg>
+                Abort
             </button>
         </div>
 
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-xl p-8 max-w-xl mx-auto text-center">
-            <svg className="mx-auto h-16 w-16 text-red-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.948 3.374c-.866-1.5-3.142-1.5-4.008 0L3.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
-
-            <h2 className="text-2xl font-bold mb-4 text-red-700">Permanent Deletion Warning</h2>
-
-            <p className="text-gray-600 mb-6 font-medium">
-                You are about to **permanently delete** the following staff member. This action cannot be undone.
+        {/* WARNING CARD */}
+        <div className="bg-white rounded-[3rem] shadow-2xl shadow-rose-200/40 border border-white overflow-hidden">
+          <div className="bg-rose-600 p-12 text-center text-white">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-white/20 backdrop-blur-md rounded-3xl mb-6">
+                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.3 16a2 2 0 001.732 3z" /></svg>
+            </div>
+            <h2 className="text-3xl font-black tracking-tighter mb-2">Final Confirmation</h2>
+            <p className="text-rose-100 font-medium opacity-90 max-w-sm mx-auto">
+              This action is irreversible. All access tokens and logs associated with this member will be detached.
             </p>
+          </div>
 
-            <div className="bg-red-50 p-6 rounded-xl border border-red-200 text-left mb-8">
-                <p className="text-sm text-red-800 font-bold mb-2">Staff Details:</p>
-                <div className="grid grid-cols-2 gap-2 text-gray-700 text-sm">
-                    <p><strong>ID:</strong></p> <p className="font-semibold">{staff.staff_id}</p>
-                    <p><strong>Name:</strong></p> <p className="font-semibold">{staff.name}</p>
-                    <p><strong>Role:</strong></p> <p className="font-semibold capitalize">{staff.role}</p>
-                    <p><strong>Email:</strong></p> <p className="font-semibold">{staff.email}</p>
+          <div className="p-12 bg-white">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                    <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Full Name</span>
+                    <span className="text-lg font-black text-slate-800 tracking-tight">{staff.name}</span>
+                </div>
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                    <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Assigned Role</span>
+                    <span className="text-lg font-black text-indigo-600 uppercase tracking-tighter italic">{staff.role}</span>
+                </div>
+                <div className="md:col-span-2 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                    <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Contact Email</span>
+                    <span className="text-lg font-black text-slate-800 tracking-tight">{staff.email}</span>
                 </div>
             </div>
 
-            <div className="flex justify-center gap-4">
-                <button
-                    onClick={deleteStaff}
-                    disabled={deleting}
-                    className="px-8 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition shadow-lg disabled:bg-red-300 disabled:cursor-not-allowed flex items-center justify-center"
-                >
-                    {deleting ? (
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                    ) : (
-                        'Yes, Delete Permanently'
-                    )}
-                </button>
-
-                <button
-                    onClick={() => router.push("/admin/staff")}
-                    disabled={deleting}
-                    className="px-8 py-3 bg-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-400 transition shadow-lg disabled:cursor-not-allowed"
-                >
-                    Cancel
-                </button>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button
+                onClick={deleteStaff}
+                disabled={deleting}
+                className="flex-1 py-5 bg-rose-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-slate-900 transition-all shadow-xl shadow-rose-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleting ? "Purging Record..." : "Confirm Deletion"}
+              </button>
+              <button
+                onClick={() => router.push("/admin/staff")}
+                disabled={deleting}
+                className="px-10 py-5 bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-slate-200 transition-all"
+              >
+                Cancel
+              </button>
             </div>
+          </div>
         </div>
       </main>
     </div>

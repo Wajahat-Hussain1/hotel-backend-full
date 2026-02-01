@@ -3,31 +3,9 @@
 import { useState } from "react";
 import Sidebar from "../../components/AdminSidebar";
 import { useRouter } from "next/navigation";
+import toast, { Toaster } from "react-hot-toast";
 
-// === Custom Notification Component (copied from previous response for consistency) ===
-const Notification = ({ message, type, onClose }) => {
-    if (!message) return null;
-    const bgColor = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
-    
-    // Auto-close after 3 seconds
-    // Note: useEffect dependency is omitted here, assuming this is a simple static utility component
-    // In a real application, you might want a proper useEffect here if this component were used frequently.
-
-    return (
-        <div 
-            className={`fixed top-5 right-5 p-4 rounded-lg border shadow-lg font-medium max-w-sm z-50 transition-opacity duration-300 ease-in-out ${bgColor}`}
-            // Adding a simple button to manually close
-            onClick={onClose}
-        >
-          <div className="flex justify-between items-start">
-              {message}
-              <button className="ml-4 font-bold text-lg leading-none" onClick={onClose}>&times;</button>
-          </div>
-        </div>
-    );
-};
-// === End Custom Notification Component ===
-
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://hotel-backend-full.onrender.com";
 
 export default function AddStaffPage() {
   const router = useRouter();
@@ -39,16 +17,12 @@ export default function AddStaffPage() {
     role: "",
     phone: "",
     salary: "",
-    hired_date: "",
+    hired_date: new Date().toISOString().split('T')[0], // Default to today
   });
+  
   const [loading, setLoading] = useState(false);
-  const [notification, setNotification] = useState({ message: null, type: null });
 
-
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("hotel_token")
-      : null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("hotel_token") : null;
 
   const updateField = (key, value) => {
     setForm({ ...form, [key]: value });
@@ -56,16 +30,16 @@ export default function AddStaffPage() {
 
   const submitForm = async (e) => {
     e.preventDefault();
-    setLoading(true);
-
+    
     if (!form.name || !form.email || !form.password || !form.role) {
-        setNotification({ message: "Name, Email, Password & Role are required!", type: "error" });
-        setLoading(false);
-        return;
+      return toast.error("Please fill in all required fields.");
     }
 
+    setLoading(true);
+    const loadingToast = toast.loading("Creating personnel record...");
+
     try {
-      const res = await fetch("http://localhost:5000/api/staff", {
+      const res = await fetch(`${API_URL}/api/staff`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -76,116 +50,160 @@ export default function AddStaffPage() {
 
       const json = await res.json();
 
-      if (!res.ok) {
-        setNotification({ message: json.message || "Failed to create staff.", type: "error" });
+      if (res.ok) {
+        toast.success("Staff member onboarded!", { id: loadingToast });
+        setTimeout(() => router.push("/admin/staff"), 1500);
+      } else {
+        toast.error(json.message || "Onboarding failed.", { id: loadingToast });
         setLoading(false);
-        return;
       }
-
-      setNotification({ message: "Staff member added successfully!", type: "success" });
-      
-      // Wait a moment for notification to show, then redirect
-      setTimeout(() => {
-        router.push("/admin/staff");
-      }, 1500);
-
     } catch (err) {
-      console.error(err);
-      setNotification({ message: "Network error: Failed to connect to server.", type: "error" });
+      toast.error("Network error: Connection failed.", { id: loadingToast });
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  // List of all staff roles for the dropdown
   const staffRoles = [
-      "manager", 
-      "receptionist", 
-      "security", 
-      "driver", 
-      "chef", 
-      "cleaner", 
-      "technician",
-      "housekeeping"
+    "manager", "receptionist", "security", "driver", 
+    "chef", "cleaner", "technician", "housekeeping"
   ];
 
-
   return (
-    <div className="flex min-h-screen bg-gray-50 text-gray-800">
+    <div className="flex min-h-screen bg-slate-50 font-sans">
+      <Toaster position="top-right" />
       <Sidebar active="staff" />
-      <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: null, type: null })} />
 
-      <main className="flex-1 p-10">
-        <div className="flex justify-between items-center mb-8 border-b pb-4">
-            <h1 className="text-4xl font-extrabold text-gray-800">
-                Add New Staff Member
+      <main className="flex-1 p-6 lg:p-12 max-w-[1200px] mx-auto w-full">
+        {/* HEADER SECTION */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
+          <div>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tighter">
+              Onboard <span className="text-indigo-600">Staff</span>
             </h1>
-            <button
-                onClick={() => router.push(`/admin/staff`)}
-                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition flex items-center space-x-2"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                <span>Back to Staff List</span>
-            </button>
+            <p className="text-slate-500 font-medium">Create a new administrative or service profile.</p>
+          </div>
+          <button
+            onClick={() => router.push("/admin/staff")}
+            className="flex items-center gap-2 px-6 py-2.5 bg-white text-slate-600 font-bold rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all shadow-sm"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to List
+          </button>
         </div>
 
-        <form
-          onSubmit={submitForm}
-          className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100 max-w-2xl mx-auto"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-            {[
-              { label: "Full Name", key: "name", type: "text", required: true, placeholder: "e.g., Ali Khan" },
-              { label: "Email Address", key: "email", type: "email", required: true, placeholder: "e.g., ali@hotel.com" },
-              { label: "Password", key: "password", type: "password", required: true, placeholder: "Must be secure" },
-              { label: "Phone Number", key: "phone", type: "text", required: false, placeholder: "+92 3XX XXXXXXX" },
-              { label: "Salary (PKR)", key: "salary", type: "number", required: false, placeholder: "50000" },
-              { label: "Hired Date", key: "hired_date", type: "date", required: false },
-            ].map((item) => (
-              <div className="space-y-1" key={item.key}>
-                <label className="block text-sm font-medium text-gray-700">
-                    {item.label} 
-                    {item.required && <span className="text-red-500">*</span>}
-                </label>
-                <input
-                  type={item.type}
-                  value={form[item.key]}
-                  onChange={(e) => updateField(item.key, e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500 transition"
-                  required={item.required}
-                  placeholder={item.placeholder}
-                />
+        {/* ONBOARDING FORM */}
+        <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-white overflow-hidden p-8 lg:p-12">
+          <form onSubmit={submitForm} className="max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              
+              {/* Profile Credentials Section */}
+              <div className="space-y-6">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b pb-2">Credentials & Info</h3>
+                
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Full Name *</label>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => updateField("name", e.target.value)}
+                    placeholder="Ali Khan"
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all placeholder:text-slate-300"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Email Address *</label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => updateField("email", e.target.value)}
+                    placeholder="staff@hotel.com"
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all placeholder:text-slate-300"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Access Password *</label>
+                  <input
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => updateField("password", e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all placeholder:text-slate-300"
+                    required
+                  />
+                </div>
               </div>
-            ))}
-          </div>
 
-          {/* ROLE - Full width */}
-          <div className="mt-5 space-y-1">
-            <label className="block text-sm font-medium text-gray-700">
-                Role <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={form.role}
-              onChange={(e) => updateField("role", e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500 transition bg-white appearance-none"
-              required
-            >
-              <option value="">--- Select Staff Role ---</option>
-              {staffRoles.map(role => (
-                  <option key={role} value={role} className="capitalize">{role}</option>
-              ))}
-            </select>
-          </div>
+              {/* Administrative Details Section */}
+              <div className="space-y-6">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b pb-2">Employment Details</h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Role *</label>
+                    <select
+                      value={form.role}
+                      onChange={(e) => updateField("role", e.target.value)}
+                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none cursor-pointer"
+                      required
+                    >
+                      <option value="">Select...</option>
+                      {staffRoles.map(role => (
+                        <option key={role} value={role} className="capitalize">{role}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Salary (PKR)</label>
+                    <input
+                      type="number"
+                      value={form.salary}
+                      onChange={(e) => updateField("salary", e.target.value)}
+                      placeholder="50000"
+                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all placeholder:text-slate-300"
+                    />
+                  </div>
+                </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full mt-8 py-3 bg-purple-600 text-white rounded-xl font-semibold text-lg hover:bg-purple-700 transition shadow-md disabled:bg-purple-300 disabled:cursor-not-allowed"
-          >
-            {loading ? "Adding Staff..." : "Add Staff Member"}
-          </button>
-        </form>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Contact Phone</label>
+                  <input
+                    type="text"
+                    value={form.phone}
+                    onChange={(e) => updateField("phone", e.target.value)}
+                    placeholder="+92 3XX XXXXXXX"
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all placeholder:text-slate-300"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Hired Date</label>
+                  <input
+                    type="date"
+                    value={form.hired_date}
+                    onChange={(e) => updateField("hired_date", e.target.value)}
+                    className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-12 pt-8 border-t border-slate-50 flex justify-end">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full md:w-auto px-12 py-4 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100 disabled:opacity-50"
+              >
+                {loading ? "Registering Staff..." : "Finalize Onboarding"}
+              </button>
+            </div>
+          </form>
+        </div>
       </main>
     </div>
   );

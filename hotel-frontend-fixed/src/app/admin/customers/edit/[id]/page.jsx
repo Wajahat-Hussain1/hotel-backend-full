@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AdminSidebar from "../../../components/AdminSidebar";
-import toast, { Toaster } from "react-hot-toast"; // 💡 react-hot-toast import kiya gaya
+import toast, { Toaster } from "react-hot-toast";
+
+// Dynamic API URL
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://hotel-backend-full.onrender.com";
 
 export default function EditCustomerPage() {
     const { id } = useParams();
@@ -18,33 +21,25 @@ export default function EditCustomerPage() {
 
     const [loading, setLoading] = useState(true);
 
-    const token =
-        typeof window !== "undefined"
-            ? localStorage.getItem("hotel_token")
-            : null;
+    const token = typeof window !== "undefined" ? localStorage.getItem("hotel_token") : null;
 
     // ===============================
-    // LOAD CUSTOMER (Replaced alert with toast)
+    // LOAD CUSTOMER
     // ===============================
     useEffect(() => {
         const loadCustomer = async () => {
-            if (!id) return;
+            if (!id || !token) return;
 
-            const loadingId = toast.loading("Loading customer data...");
             try {
-                const res = await fetch(
-                    `http://localhost:5000/api/customers/${id}`,
-                    {
-                        headers: { Authorization: `Bearer ${token}` },
-                    }
-                );
+                // Updated to use production API_URL
+                const res = await fetch(`${API_URL}/api/customers/${id}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
 
                 const json = await res.json();
-                toast.dismiss(loadingId);
                 
                 if (!res.ok) {
                     toast.error(json.message || "Failed to load customer details.");
-                    // router.push("/admin/customers"); // Redirect if failed
                     return;
                 }
 
@@ -55,45 +50,40 @@ export default function EditCustomerPage() {
                     password: "", // blank on purpose
                 });
             } catch (err) {
-                toast.dismiss(loadingId);
                 toast.error("Network error: Failed to load customer.");
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
 
         loadCustomer();
     }, [id, token]);
 
-    // ===============================
-    // HANDLE CHANGE
-    // ===============================
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
     };
 
     // ===============================
-    // SAVE CHANGES (Replaced alert with toast)
+    // SAVE CHANGES
     // ===============================
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         const payload = { ...form };
-        if (!payload.password) delete payload.password; // Agar password blank hai to send na karein
+        if (!payload.password) delete payload.password;
 
         const updateToastId = toast.loading("Saving changes...");
         
         try {
-            const res = await fetch(
-                `http://localhost:5000/api/customers/${id}`,
-                {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify(payload),
-                }
-            );
+            // Updated to use production API_URL
+            const res = await fetch(`${API_URL}/api/customers/${id}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(payload),
+            });
 
             const json = await res.json();
             toast.dismiss(updateToastId);
@@ -103,7 +93,6 @@ export default function EditCustomerPage() {
             }
 
             toast.success("Customer updated successfully!");
-            // Success hone par customer detail page ya list page par redirect
             router.push(`/admin/customers/${id}`); 
         } catch (err) {
             toast.dismiss(updateToastId);
@@ -111,119 +100,109 @@ export default function EditCustomerPage() {
         }
     };
 
-    // ===============================
-    // JSX RETURN (Professional Design)
-    // ===============================
     return (
-        <div className="flex min-h-screen bg-gray-50">
+        <div className="flex min-h-screen bg-slate-50">
             <AdminSidebar />
-            <Toaster position="bottom-right" reverseOrder={false} />
+            <Toaster position="top-center" reverseOrder={false} />
 
-            <main className="flex-1 p-8 lg:p-10">
+            <main className="flex-1 p-8">
                 
-                {/* Header and Back Button */}
-                <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-200">
-                    <h1 className="text-3xl font-extrabold text-gray-800">Edit Customer (ID: {id})</h1>
+                {/* Header Section */}
+                <div className="flex justify-between items-center mb-10">
+                    <div>
+                        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Modify Customer</h1>
+                        <p className="text-slate-500 text-sm font-medium">Updating Profile for ID: {id}</p>
+                    </div>
                     <button
                         onClick={() => router.back()}
-                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition shadow-md"
+                        className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition shadow-sm flex items-center gap-2"
                     >
-                        ← Back to Details
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        Discard Changes
                     </button>
                 </div>
                 
                 {loading ? (
-                    <div className="p-10 text-center text-gray-500">
-                        <p>Loading customer profile...</p>
+                    <div className="flex flex-col items-center justify-center h-64">
+                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
+                         <p className="text-slate-400 font-medium tracking-tight">Syncing with server...</p>
                     </div>
                 ) : (
                     <div className="flex justify-center">
                         <form
                             onSubmit={handleSubmit}
-                            className="bg-white p-8 rounded-xl shadow-2xl border border-indigo-100 w-full max-w-2xl"
+                            className="bg-white p-10 rounded-3xl shadow-sm border border-slate-100 w-full max-w-2xl"
                         >
-                            <h2 className="text-xl font-semibold text-indigo-700 mb-6 border-b pb-2">Customer Information</h2>
+                            <div className="flex items-center gap-3 mb-8 border-b border-slate-50 pb-6">
+                                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    </svg>
+                                </div>
+                                <h2 className="text-xl font-bold text-slate-900">Personal Information</h2>
+                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* First Name */}
-                                <div className="space-y-1">
-                                    <label className="block text-sm font-medium text-gray-700">
-                                        First Name
-                                    </label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-2">
+                                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">First Name</label>
                                     <input
                                         type="text"
                                         name="first_name"
                                         value={form.first_name}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 shadow-sm"
+                                        className="w-full px-5 py-3 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all font-semibold text-slate-700"
                                         required
                                     />
                                 </div>
 
-                                {/* Last Name */}
-                                <div className="space-y-1">
-                                    <label className="block text-sm font-medium text-gray-700">
-                                        Last Name
-                                    </label>
+                                <div className="space-y-2">
+                                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Last Name</label>
                                     <input
                                         type="text"
                                         name="last_name"
                                         value={form.last_name}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 shadow-sm"
+                                        className="w-full px-5 py-3 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all font-semibold text-slate-700"
                                         required
                                     />
                                 </div>
                             </div>
                             
-                            {/* Email */}
-                            <div className="mt-6 space-y-1">
-                                <label className="block text-sm font-medium text-gray-700">
-                                    Email
-                                </label>
+                            <div className="mt-8 space-y-2">
+                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
                                 <input
                                     type="email"
                                     name="email"
                                     value={form.email}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 shadow-sm"
+                                    className="w-full px-5 py-3 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all font-semibold text-slate-700"
                                     required
                                 />
                             </div>
 
-                            {/* New Password */}
-                            <div className="mt-6 space-y-1">
-                                <label className="block text-sm font-medium text-gray-700">
-                                    New Password
-                                </label>
+                            <div className="mt-8 space-y-2">
+                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Security: Update Password</label>
                                 <input
                                     type="password"
                                     name="password"
                                     value={form.password}
                                     onChange={handleChange}
-                                    placeholder="Leave blank to keep current password"
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 shadow-sm"
+                                    placeholder="••••••••"
+                                    className="w-full px-5 py-3 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all font-semibold text-slate-700"
                                 />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Only fill this field if you want to change the customer's password.
+                                <p className="text-[10px] text-slate-400 font-medium ml-1">
+                                    Leave blank to maintain current security settings.
                                 </p>
                             </div>
 
-                            {/* Action Buttons */}
-                            <div className="flex gap-4 mt-8 pt-4 border-t justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => router.back()}
-                                    className="px-6 py-2 bg-gray-500 text-white rounded-lg shadow-md hover:bg-gray-600 transition"
-                                >
-                                    Cancel
-                                </button>
-                                
+                            <div className="flex gap-4 mt-12 pt-8 border-t border-slate-50">
                                 <button
                                     type="submit"
-                                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg shadow-lg hover:bg-indigo-700 transition font-semibold"
+                                    className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition font-black tracking-tight"
                                 >
-                                    Save Changes
+                                    Save Profile Updates
                                 </button>
                             </div>
                         </form>
