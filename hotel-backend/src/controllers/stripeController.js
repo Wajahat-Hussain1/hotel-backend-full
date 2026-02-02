@@ -21,6 +21,10 @@ const createCheckoutSession = async (req, res) => {
       return error(res, "Unauthorized", 403);
     }
 
+    // 🌐 Define the Frontend URL dynamically
+    // On Render, it will use your Vercel URL. Locally, it uses localhost.
+    const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
@@ -32,13 +36,14 @@ const createCheckoutSession = async (req, res) => {
             product_data: {
               name: `Room Booking #${booking.booking_id}`,
             },
-            unit_amount: booking.total_price * 100, // paisa
+            unit_amount: Math.round(booking.total_price * 100), // Ensure it's an integer for Stripe (paisa)
           },
           quantity: 1,
         },
       ],
-      success_url: `http://localhost:3000/payment/success?booking_id=${booking.booking_id}`,
-      cancel_url: `http://localhost:3000/payment/cancel?booking_id=${booking.booking_id}`,
+      // Use the dynamic FRONTEND_URL here
+      success_url: `${FRONTEND_URL}/payment/success?booking_id=${booking.booking_id}`,
+      cancel_url: `${FRONTEND_URL}/payment/cancel?booking_id=${booking.booking_id}`,
       metadata: {
         booking_id: booking.booking_id,
       },
