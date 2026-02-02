@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import AdminSidebar from "@/app/admin/components/AdminSidebar";
 import toast, { Toaster } from "react-hot-toast";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://hotel-backend-full.onrender.com";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 // --- REUSABLE INPUT FIELD ---
 function InputField({ label, value, onChange, placeholder, iconPath, type = "text" }) {
