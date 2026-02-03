@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Sidebar from "../../../components/AdminSidebar";
+import AdminSidebar from "../../../components/AdminSidebar";
 import toast, { Toaster } from "react-hot-toast";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://hotel-backend-full.onrender.com";
@@ -96,7 +96,7 @@ export default function EditPaymentPage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-800">
-      <Sidebar active="payments" />
+      <AdminSidebar active="payments" />
       <Toaster position="top-right" />
 
       <main className="flex-1 p-6 lg:p-12 flex flex-col items-center">
