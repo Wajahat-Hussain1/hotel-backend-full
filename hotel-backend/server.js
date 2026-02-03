@@ -10,8 +10,8 @@ const app = express();
 // --- CORS CONFIGURATION ---
 const allowedOrigins = [
   'http://localhost:3000', 
-  'https://hotel-backend-full-7ggu7vhxw-wajahat-hussains-projects-629447fe.vercel.app',
-  'https://hotel-backend-full-60xy7hi77-wajahat-hussains-projects-629447fe.vercel.app'
+  'hotel-management-reservation-beta.vercel.app',
+  'hotel-management-reservation-beta.vercel.app'
 ];
 
 app.use(cors({
