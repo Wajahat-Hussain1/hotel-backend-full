@@ -59,7 +59,7 @@ export default function PaymentsPage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <SAdminSidebar active="payments" />
+      <AdminSidebar active="payments" />
       <Toaster position="top-right" />
 
       <main className="flex-1 p-6 lg:p-12">
