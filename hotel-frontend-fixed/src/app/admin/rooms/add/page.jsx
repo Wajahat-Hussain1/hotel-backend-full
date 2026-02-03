@@ -103,7 +103,7 @@ export default function AddRoomPage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar active="rooms" />
+      <AdminSidebar active="rooms" />
       <Toaster position="top-right" />
 
       <main className="flex-1 p-6 lg:p-12">
