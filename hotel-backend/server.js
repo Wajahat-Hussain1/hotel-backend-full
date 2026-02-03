@@ -8,31 +8,62 @@ const errorMiddleware = require('./src/middlewares/errorMiddleware');
 const app = express();
 
 // --- CORS CONFIGURATION ---
+//const allowedOrigins = [
+//  'http://localhost:3000', 
+//  'hotel-management-reservation-beta.vercel.app',
+//  'hotel-management-reservation-beta.vercel.app'
+//];
+
+//app.use(cors({
+//  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+//    if (!origin) return callback(null, true);
+
+    // Check if origin is in our list OR is a Vercel preview URL from your project
+//    const isAllowed = allowedOrigins.indexOf(origin) !== -1;
+//    const isVercelPreview = origin.endsWith(".vercel.app") && origin.includes("wajahat-hussains-projects");
+
+//    if (isAllowed || isVercelPreview) {
+//      return callback(null, true);
+//    } else {
+      // This log will appear in Render so you can see exactly what URL to add next time
+//      console.log("CORS blocked origin:", origin);
+//      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+//      return callback(new Error(msg), false);
+//    }
+//  },
+//  credentials: true
+//}));
+
+// --- UPDATED CORS CONFIGURATION ---
 const allowedOrigins = [
   'http://localhost:3000', 
-  'hotel-management-reservation-beta.vercel.app',
-  'hotel-management-reservation-beta.vercel.app'
+  'https://hotel-management-reservation.vercel.app', // Your main production link
+  'https://hotel-management-reservation-beta.vercel.app'
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
+    // 1. Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
 
-    // Check if origin is in our list OR is a Vercel preview URL from your project
-    const isAllowed = allowedOrigins.indexOf(origin) !== -1;
-    const isVercelPreview = origin.endsWith(".vercel.app") && origin.includes("wajahat-hussains-projects");
+    // 2. Check if the origin is explicitly in our allowed list
+    const isAllowed = allowedOrigins.includes(origin);
+
+    // 3. Check if it's ANY Vercel preview link from your project
+    // This looks for anything ending in .vercel.app
+    const isVercelPreview = origin.endsWith(".vercel.app");
 
     if (isAllowed || isVercelPreview) {
       return callback(null, true);
     } else {
-      // This log will appear in Render so you can see exactly what URL to add next time
       console.log("CORS blocked origin:", origin);
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+      return callback(new Error('CORS policy blockage'), false);
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(bodyParser.json());
